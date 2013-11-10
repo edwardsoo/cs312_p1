@@ -47,25 +47,44 @@ eval_row_b0e7 [] this post me h =
 eval_row_b0e7 pre this [] me h =
   (count_b0e7 this me)*h
 eval_row_b0e7 pre this post me h
-  | length pre == length post = (count_block_jumps_b0e7 (head pre) this (head post) me) * (h-length pre) + eval_occurence
-  | length pre > length post = (count_block_jumps_b0e7 (pad_b0e7 (head pre)) this (head post) me) * (h-length pre) + eval_occurence
-  | otherwise = (count_block_jumps_b0e7 (head pre) this (pad_b0e7 (head post)) me) * (h-length pre) + eval_occurence
-  where eval_occurence = (count_b0e7 this me) * (length pre + 1)
+  | length pre == length post = (eval_row_function_b0e7 (head pre) this (head post) me h weight)
+  | length pre > length post = (eval_row_function_b0e7 (pad_b0e7 (head pre)) this (head post) me h weight)
+  | otherwise = (eval_row_function_b0e7 (head pre) this (pad_b0e7 (head post)) me h weight)
+  where weight = (length pre) + 1
 
--- Returns the number of jumps that is blocked
-count_block_jumps_b0e7 _ [] _ _ = 0
-count_block_jumps_b0e7 (bl:br:bs) (r:rs) (fl:fr:fs) me =
-  (block_jump_b0e7 fl r br me) + (block_jump_b0e7 fr r bl me) +
-  (count_block_jumps_b0e7 (br:bs) rs (fr:fs) me)
+eval_row_function_b0e7 front this back me h weight =
+  (count_cannot_jump_b0e7 front this back False me) * (h-weight) -
+  (count_captured_b0e7 front this back me) * weight +
+  (count_b0e7 this me) * weight
 
-block_jump_b0e7 front this back me 
-  | front == (opponent_b0e7 me) && this == me && back == me = 1
-  | otherwise = 0
+-- Returns the number of opponents that cannot jump over this row
+count_cannot_jump_b0e7 _ [] _ prevJmp me = 0
+count_cannot_jump_b0e7 (bl:br:bs) (r:rs) (fl:fr:fs) prevJmp me
+  | prevJmp && (captured_b0e7 fl r br me) = 1 +
+    (count_cannot_jump_b0e7 (br:bs) rs (fr:fs) ((captured_b0e7 fr r bl me)) me)
+  | otherwise = (count_cannot_jump_b0e7 (br:bs) rs (fr:fs) ((captured_b0e7 fr r bl me)) me)
+
+-- Returns the number of pieces on this row that are vulnerable to being captured
+count_captured_b0e7 _ [] _ me = 0
+count_captured_b0e7 (bl:br:bs) (r:rs) (fl:fr:fs) me
+  | (captured_b0e7 fl r br me) || (captured_b0e7 fr r bl me) = 1 + 
+    (count_captured_b0e7 (br:bs) rs (fr:fs) me)
+  | otherwise = (count_captured_b0e7 (br:bs) rs (fr:fs) me)
+  
+-- returns 1 if front cannot jump to back and capture this
+block_b0e7 front this back me 
+  | front == (opponent_b0e7 me) && this == me && back /= '-' = True
+  | otherwise = False
+
+-- returns if if front can jump to back and capture this
+captured_b0e7 front this back me
+  | front == (opponent_b0e7 me) && this == me && back == '-' = True
+  | otherwise = False
 
 append_b0e7 [] e = [e]
 append_b0e7 (x:xs) e = x:append_b0e7 xs e
 
-pad_b0e7 list = '-':(append_b0e7 list '-')
+pad_b0e7 list = '!':(append_b0e7 list '!')
 
 -- returns the number of an element in a list
 count_b0e7 [] e = 0
