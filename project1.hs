@@ -7,21 +7,26 @@
 -- moves: the number of moves to search ahead
 oska_b0e7 board me moves = []
 
--- generate neighbor state, print state and eval value
+-- Print all neighbor states and thie eval values
 print_moves_evals_b0e7:: [String] -> Char-> IO()
 print_moves_evals_b0e7 state me =
   print_states_evals_b0e7 (gen_state_b0e7 state me) me  
 
+-- Prints a list of states and their eval values
 print_states_evals_b0e7:: [[String]] -> Char -> IO()
 print_states_evals_b0e7 [] me = putStrLn ""
 print_states_evals_b0e7 (s:ss) me = do
-  print_b_b0e7 s
-  putStr "eval: "
-  putStrLn (show (evaluate_state_b0e7 s me)) 
+  print_state_eval s me
   putStrLn ""
   print_states_evals_b0e7 ss me 
 
--- displays a state
+-- Prints a state and its eval value
+print_state_eval state me = do
+  print_b_b0e7 state
+  putStr "eval: "
+  putStrLn (show (evaluate_state_b0e7 state me))
+
+-- Prints a state
 print_b_b0e7 state = disp_b_b0e7 state (length state)
 disp_b_b0e7 [] n = putStr ""
 disp_b_b0e7 (x:xs) n = do
@@ -30,8 +35,32 @@ disp_b_b0e7 (x:xs) n = do
   disp_b_b0e7 xs n 
 
 -- Evaluates a state and returns an integer
-evaluate_state_b0e7 state me =
-  sum_rows_eval_b0e7 [] (head state) (tail state) me (length state)
+evaluate_state_b0e7 state 'w' = evaluate_state_b0e7' state 'w'
+evaluate_state_b0e7 state 'b' = evaluate_state_b0e7' (reverse state) 'b'
+
+-- Helper function, assumes my side starts from the top
+evaluate_state_b0e7' state me
+  | won_b0e7 state me = (length state) * 2
+  | won_b0e7 reversed (opponent_b0e7 me) = (length state) * -2
+  | otherwise = (sum_rows_eval_b0e7 [] (head state) (tail state) me (length state)) -
+    (sum_rows_eval_b0e7 [] (head reversed) (tail reversed) (opponent_b0e7 me) (length reversed))
+  where reversed = reverse state
+
+-- Determine if I have won in a state
+won_b0e7 state me =
+  no_piece_b0e7 state (opponent_b0e7 me) || 
+  all_remaining_done_b0e7 state me
+
+-- Returns true if all my remaining pieces are on the opponent's start row
+all_remaining_done_b0e7 state me =
+  no_piece_b0e7 (tail reversed) me && count_b0e7 (head reversed) me > 0
+  where reversed = reverse state
+
+-- Returns true if board no longer has pieces of side
+no_piece_b0e7::[String] -> Char -> Bool
+no_piece_b0e7 state side = foldl (count_piece_in_row_b0e7 side) 0 state == 0
+count_piece_in_row_b0e7::Char -> Int -> String -> Int
+count_piece_in_row_b0e7 side acc row = acc + count_b0e7 row side
 
 -- Evaluates the state row by row
 sum_rows_eval_b0e7:: [String] -> String -> [String] -> Char -> Int -> Int
@@ -54,7 +83,7 @@ eval_row_b0e7 pre this post me h
 
 eval_row_function_b0e7 front this back me h weight =
   (count_cannot_jump_b0e7 front this back False me) * (h-weight) -
-  (count_captured_b0e7 front this back me) * weight +
+  (count_captured_b0e7 front this back me) * (h-weight + 2) +
   (count_b0e7 this me) * weight
 
 -- Returns the number of opponents that cannot jump over this row
