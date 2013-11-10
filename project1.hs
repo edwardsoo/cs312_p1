@@ -5,12 +5,27 @@
 -- board: current state of the game, represented by an array of rows
 -- me: 'w' or 'b'
 -- moves: the number of moves to search ahead
-oska_b0e7 board me moves = []
+oska_b0e7 board me moves = min_max_root_b0e7 board me moves
+
+min_max_root_b0e7 state me h =
+  snd (tuple_max_b0e7 (zip (map (min_max_b0e7 me (h-1) False) states) states) (-100 * length state, []))
+  where states = gen_state_b0e7 me state
+
+min_max_b0e7::Char -> Int -> Bool -> [String] -> Int
+min_max_b0e7 me h myTurn state
+  | h == 0 = evaluate_state_b0e7 me state
+  | myTurn = maximum (map (min_max_b0e7 me (h-1) False) (gen_state_b0e7 me state))
+  | otherwise = minimum (map (min_max_b0e7 me (h-1) True) (gen_state_b0e7 (opponent_b0e7 me) state))
+
+tuple_max_b0e7 [] lead = lead
+tuple_max_b0e7 (x:xs) lead
+  | (fst x) > (fst lead) = tuple_max_b0e7 xs x
+  | otherwise = tuple_max_b0e7 xs lead
 
 -- Print all neighbor states and thie eval values
 print_moves_evals_b0e7:: [String] -> Char-> IO()
 print_moves_evals_b0e7 state me =
-  print_states_evals_b0e7 (gen_state_b0e7 state me) me  
+  print_states_evals_b0e7 (gen_state_b0e7 me state) me  
 
 -- Prints a list of states and their eval values
 print_states_evals_b0e7:: [[String]] -> Char -> IO()
@@ -24,7 +39,7 @@ print_states_evals_b0e7 (s:ss) me = do
 print_state_eval state me = do
   print_b_b0e7 state
   putStr "eval: "
-  putStrLn (show (evaluate_state_b0e7 state me))
+  putStrLn (show (evaluate_state_b0e7 me state))
 
 -- Prints a state
 print_b_b0e7 state = disp_b_b0e7 state (length state)
@@ -35,8 +50,8 @@ disp_b_b0e7 (x:xs) n = do
   disp_b_b0e7 xs n 
 
 -- Evaluates a state and returns an integer
-evaluate_state_b0e7 state 'w' = evaluate_state_b0e7' state 'w'
-evaluate_state_b0e7 state 'b' = evaluate_state_b0e7' (reverse state) 'b'
+evaluate_state_b0e7 'w' state = evaluate_state_b0e7' state 'w'
+evaluate_state_b0e7 'b' state = evaluate_state_b0e7' (reverse state) 'b'
 
 -- Helper function, assumes my side starts from the top
 evaluate_state_b0e7' state me
@@ -81,32 +96,36 @@ eval_row_b0e7 pre this post me h
   | otherwise = (eval_row_function_b0e7 (head pre) this (pad_b0e7 (head post)) me h weight)
   where weight = (length pre) + 1
 
+-- Evaluate by summing the weighted count of 
+-- 1. my pieces on this row
+-- 2. opponent's piece on the next row that cannot attack
+-- 3. my pieces on this row that is under attack
 eval_row_function_b0e7 front this back me h weight =
-  (count_cannot_jump_b0e7 front this back False me) * (h-weight) -
-  (count_captured_b0e7 front this back me) * (h-weight + 2) +
+  (count_blocked_opp_b0e7 front this back False me) * (h - weight) -
+  (count_being_atk_b0e7 front this back me) * (h - weight + 2) +
   (count_b0e7 this me) * weight
 
--- Returns the number of opponents that cannot jump over this row
-count_cannot_jump_b0e7 _ [] _ prevJmp me = 0
-count_cannot_jump_b0e7 (bl:br:bs) (r:rs) (fl:fr:fs) prevJmp me
-  | prevJmp && (captured_b0e7 fl r br me) = 1 +
-    (count_cannot_jump_b0e7 (br:bs) rs (fr:fs) ((captured_b0e7 fr r bl me)) me)
-  | otherwise = (count_cannot_jump_b0e7 (br:bs) rs (fr:fs) ((captured_b0e7 fr r bl me)) me)
+-- Returns the number of opponents on the next row that cannot attack this row
+count_blocked_opp_b0e7 _ [] _ prevJmp me = 0
+count_blocked_opp_b0e7 (bl:br:bs) (r:rs) (fl:fr:fs) prevJmp me
+  | prevJmp && (blocked_b0e7 fl r br me) = 1 +
+    (count_blocked_opp_b0e7 (br:bs) rs (fr:fs) ((blocked_b0e7 fr r bl me)) me)
+  | otherwise = (count_blocked_opp_b0e7 (br:bs) rs (fr:fs) ((blocked_b0e7 fr r bl me)) me)
 
--- Returns the number of pieces on this row that are vulnerable to being captured
-count_captured_b0e7 _ [] _ me = 0
-count_captured_b0e7 (bl:br:bs) (r:rs) (fl:fr:fs) me
-  | (captured_b0e7 fl r br me) || (captured_b0e7 fr r bl me) = 1 + 
-    (count_captured_b0e7 (br:bs) rs (fr:fs) me)
-  | otherwise = (count_captured_b0e7 (br:bs) rs (fr:fs) me)
+-- Returns the number of pieces on this row that are under attack
+count_being_atk_b0e7 _ [] _ me = 0
+count_being_atk_b0e7 (bl:br:bs) (r:rs) (fl:fr:fs) me
+  | (being_atk fl r br me) || (being_atk fr r bl me) = 1 + 
+    (count_being_atk_b0e7 (br:bs) rs (fr:fs) me)
+  | otherwise = (count_being_atk_b0e7 (br:bs) rs (fr:fs) me)
   
--- returns 1 if front cannot jump to back and capture this
-block_b0e7 front this back me 
+-- returns True if front cannot jump to back and capture this
+blocked_b0e7 front this back me 
   | front == (opponent_b0e7 me) && this == me && back /= '-' = True
   | otherwise = False
 
--- returns if if front can jump to back and capture this
-captured_b0e7 front this back me
+-- returns True if front can jump to back and capture this
+being_atk front this back me
   | front == (opponent_b0e7 me) && this == me && back == '-' = True
   | otherwise = False
 
@@ -143,10 +162,16 @@ interleave_b0e7 this next
   | length this > length next = head this:head next :interleave_b0e7 (tail this) (tail next)
   | otherwise = head next : head this : interleave_b0e7 (tail this) (tail next)
 
+-- returns a list of tuple {eval, state}, 
+-- where eval is the output of the static board eval function and 
+-- state is a neighbor state of the current state of the board
+gen_eval_state_tuple_b0e7 me board = 
+  zip (map (evaluate_state_b0e7 me) states) states 
+  where states = gen_state_b0e7 me board
 
 -- Use this function to generate all possible moves of current state
 -- result does not include the current state; can be empty
-gen_state_b0e7 board me
+gen_state_b0e7 me board
   | me == 'w' = gen_state_all_row_b0e7 [] board 'w'
   | otherwise = map reverse (gen_state_all_row_b0e7 [] (reverse board) 'b')
 
