@@ -56,15 +56,18 @@ evaluate_state_b0e7 'b' state = evaluate_state_b0e7' (reverse state) 'b'
 -- Helper function, assumes my side starts from the top
 evaluate_state_b0e7' state me
   | won_b0e7 state me = (length state) * 2
-  | won_b0e7 reversed (opponent_b0e7 me) = (length state) * -2
+  | won_b0e7 reversed (opponent_b0e7 me) = (length state) * (-2)
   | otherwise = (sum_rows_eval_b0e7 [] (head state) (tail state) me (length state)) -
     (sum_rows_eval_b0e7 [] (head reversed) (tail reversed) (opponent_b0e7 me) (length reversed))
   where reversed = reverse state
 
 -- Determine if I have won in a state
-won_b0e7 state me =
-  no_piece_b0e7 state (opponent_b0e7 me) || 
-  all_remaining_done_b0e7 state me
+won_b0e7 state me
+  | no_piece_b0e7 state (opponent_b0e7 me) = True
+  | (all_remaining_done_b0e7 state me &&
+    not (all_remaining_done_b0e7 (reverse state) (opponent_b0e7 me))) = True
+  | otherwise = (count_piece_on_board_b0e7 state me) > 
+    (count_piece_on_board_b0e7 (reverse state) (opponent_b0e7 me))
 
 -- Returns true if all my remaining pieces are on the opponent's start row
 all_remaining_done_b0e7 state me =
@@ -72,9 +75,8 @@ all_remaining_done_b0e7 state me =
   where reversed = reverse state
 
 -- Returns true if board no longer has pieces of side
-no_piece_b0e7::[String] -> Char -> Bool
-no_piece_b0e7 state side = foldl (count_piece_in_row_b0e7 side) 0 state == 0
-count_piece_in_row_b0e7::Char -> Int -> String -> Int
+no_piece_b0e7 state side = count_piece_on_board_b0e7 state side == 0
+count_piece_on_board_b0e7 state side = foldl (count_piece_in_row_b0e7 side) 0 state
 count_piece_in_row_b0e7 side acc row = acc + count_b0e7 row side
 
 -- Evaluates the state row by row
@@ -172,6 +174,9 @@ gen_eval_state_tuple_b0e7 me board =
 -- Use this function to generate all possible moves of current state
 -- result does not include the current state; can be empty
 gen_state_b0e7 me board
+  | null (gen_state_b0e7' me board) = [board]
+  | otherwise = gen_state_b0e7' me board
+gen_state_b0e7' me board
   | me == 'w' = gen_state_all_row_b0e7 [] board 'w'
   | otherwise = map reverse (gen_state_all_row_b0e7 [] (reverse board) 'b')
 
